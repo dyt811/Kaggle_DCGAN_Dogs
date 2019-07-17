@@ -2,39 +2,14 @@
 
 ## Introduction
 
-This is a relatively simple Deep Convolutional Generative Adversarial Network built in Keras. Given a dataset of images it will be able 
-to generate new images similar to those in the dataset. It was originally built to generate landscape paintings such 
-as the ones shown below. As a result, also contained are some scripts for collecting artwork from ArtUK and resizing images to make them work with the network. There are also examples of it being trained on Space imagery as well.
+This is a relatively simple Deep Convolutional Generative Adversarial Network built in Keras. Given a dataset of images it will be able to generate new images similar to those in the dataset. 
 
-## Example Outputs
+It was originally built to generate landscape paintings such as the source repositotires but it has since been repurposed to generate dog images for Kaggle competition as shown here: https://www.kaggle.com/c/generative-dog-images. It will also serve as the model project for subsequent GAN exploration and data augmentation pipeline being built at CNBP and MotionCorrect.
 
-### Landscapes
-
-The following images were generated at 256x192, then upscaled using [the bigjpg tool](https://bigjpg.com/) which is a GAN based upscaling tool.
-
-|Mountain Lake|Peninsula|
-|:-----------:|:-----------:|
-| <img src="https://raw.githubusercontent.com/DataSnaek/DCGAN-Keras/master/data/output/upscaled/Mountain_Lake.png"> | <img src="https://raw.githubusercontent.com/DataSnaek/DCGAN-Keras/master/data/output/upscaled/Peninsula.png"> |
-
-|Hill Bushes|Grassy Mountain|
-|:-----------:|:-----------:|
-| <img src="https://raw.githubusercontent.com/DataSnaek/DCGAN-Keras/master/data/output/upscaled/Hill_Bushes.png"> | <img src="https://raw.githubusercontent.com/DataSnaek/DCGAN-Keras/master/data/output/upscaled/Grassy_Mountain.png"> |
-
-Here is a selection of images generated at 128x128
-
-|128x Selection|
-|:-----------:|
-|<img src="https://raw.githubusercontent.com/DataSnaek/DCGAN-Keras/master/data/output/grid/out-64.png" width="80%"> |
-
-### Space Images
-
-|128x Selection|
-|:-----------:|
-|<img src="https://raw.githubusercontent.com/DataSnaek/DCGAN-Keras/master/data/output/grid/148650.jpg" width="120%"> |
 
 # Getting Started
 
-This section talks about how to use this model, its prerequisites and its paramaters.
+
 
 ## Prerequisites
 This model was built using the following packages and versions (earlier versions may still work):
