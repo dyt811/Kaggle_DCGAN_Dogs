@@ -1,4 +1,5 @@
 from keras.models import Sequential, Model, load_model
+from keras.callbacks import TensorBoard, ModelCheckpoint
 from keras.layers import (
     UpSampling2D,
     Conv2D,
@@ -24,14 +25,25 @@ from scipy.misc import imsave
 from pathlib import Path
 
 path_current_file = Path(os.path.realpath(__file__))
-path_module = path_current_file.parents[2]
+path_module = path_current_file.parents[
+    2
+]  # this file is located 3 folders deep: /, /model, /model/Kaggle_DCGAN_Dogs
 print(f"{path_module}")
 sys.path.append(f"{path_module}")
 
 from PythonUtils.file import unique_name
 
+path_log_run = path_module / Path("logs")
+
+from PythonUtils.folder import create
+
+create(path_log_run)  # create the training specific folder if it doesn't exist already.
 
 noise_parameters = 100
+
+"""
+Largely inspired from source: https://github.com/DataSnaek/DCGAN-Keras
+"""
 
 
 class DCGAN:
@@ -45,9 +57,11 @@ class DCGAN:
         self.starting_filters = 64
         self.kernel_size = 3
 
-        self.discriminator_path = path_discriminator
-        self.generator_path = path_generator
-        self.output_directory = path_output
+        self.discriminator_path = Path(path_discriminator)  # .as_posix()
+        self.generator_path = Path(path_generator)  # .as_posix()
+        self.output_directory = Path(path_output)  # .as_posix()
+
+        self.model_name = Path(path_output) / Path(f"{unique_name()}_{__name__}.h5")
 
     def build_generator(self):
         """
@@ -193,30 +207,59 @@ class DCGAN:
         # Specify te generators used to build various components.
         optimizer_generator = Adam(0.0002, 0.5)
         optimizer_discriminator = Adam(0.0002, 0.5)
-        optimizer_overall_model = Adam(0.0002, 0.5)
+        optimizer_GAN = Adam(0.0002, 0.5)
 
-        loss_measure = "binary_crossentropy"
-        metrics_discrimnator = ["accuracy"]
+        loss_measure_generator = "binary_crossentropy"
+        loss_measure_discriminator = "binary_crossentropy"
+        loss_measure_GAN = "binary_crossentropy"
+
+        metrics = ["accuracy", "mae", "mse", "mape", "cosine"]
 
         # See if the specified model paths exist, if they don't then we start training new models
-        if os.path.exists(self.discriminator_path) and os.path.exists(
-            self.generator_path
-        ):
+        if self.discriminator_path.is_file() and self.generator_path.is_file():
             self.discriminator = load_model(self.discriminator_path)
             self.generator = load_model(self.generator_path)
             print("Loaded models...")
         else:  # training new model.
             print("Training models...")
+
+            callback_save_model = ModelCheckpoint(
+                self.model_name,
+                monitor="accuracy",
+                verbose=1,
+                save_best_only=True,
+                mode="max",
+            )
+
+            # Generate the tensorboard
+            callback_tensorboard = TensorBoard(
+                log_dir=path_log_run, histogram_freq=0, write_images=True
+            )
+
+            self.callbacks_list = [
+                callback_tensorboard
+            ]  # ,callback_save_model]: #save model doesn't makc much sense when it is such a dynamic process.
+
             # Build discriminator and compile it.
             self.discriminator = self.build_discriminator()
+
+            # Training discriminator!
             self.discriminator.compile(
-                loss=loss_measure,
+                loss=loss_measure_discriminator,
                 optimizer=optimizer_discriminator,
-                metrics=metrics_discrimnator,
+                metrics=metrics,
+                callbacks=self.callbacks_list,
             )
+
             # Build generator and compile it.
             self.generator = self.build_generator()
-            self.generator.compile(loss=loss_measure, optimizer=optimizer_generator)
+
+            # Training generator!
+            self.generator.compile(
+                loss=loss_measure_generator,
+                optimizer=optimizer_generator,
+                callback_save_model=self.callbacks_list,
+            )
 
         # These next few lines setup the training for the GAN, which the input Vector has a shape of noise_parameters
         z = Input(shape=(noise_parameters,))
@@ -232,9 +275,7 @@ class DCGAN:
         self.combined = Model(z, valid)
 
         # Compile the model using binary_crossentropy with the
-        self.combined.compile(
-            loss="binary_crossentropy", optimizer=optimizer_overall_model
-        )
+        self.combined.compile(loss=loss_measure_GAN, optimizer=optimizer_GAN)
 
     def load_images(self, image_path):
         """
