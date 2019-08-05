@@ -21,7 +21,7 @@ import os, sys
 import argparse
 from ast import literal_eval
 
-from scipy.misc import imsave
+from imageio import imsave
 from pathlib import Path
 
 path_current_file = Path(os.path.realpath(__file__))
@@ -32,6 +32,7 @@ print(f"{path_module}")
 sys.path.append(f"{path_module}")
 
 from PythonUtils.file import unique_name
+from PythonUtils.folder import recursive_list
 
 path_log_run = path_module / Path("logs")
 
@@ -142,50 +143,73 @@ class DCGAN:
     def build_discriminator(self):
         """
         Build and return Keras.models.Model for discriminator with the summary indicated below.
+        Keep in mind, the discriminator must not be TOO capable. In fact, it is probably better for the training to make a semi-incompetent discrimnator.
         :return: a discriminator model that only requires an image as input.
         """
         img_shape = (self.img_size[0], self.img_size[1], self.channels)
 
         model = Sequential()
-
+        ###############
+        # Conv Stack 1:
+        ###############
         model.add(
             Conv2D(
-                32,
-                kernel_size=self.kernel_size,
+                128,
+                kernel_size=5,
                 strides=2,
                 input_shape=img_shape,
                 padding="same",
             )
         )  # 128x128 -> 64x64
-        model.add(LeakyReLU(alpha=0.2))
-        model.add(Dropout(0.25))
 
+        model.add(LeakyReLU(alpha=0.2))
+        model.add(BatchNormalization(momentum=0.8))
+        #model.add(Dropout(0.2))
+
+
+        ###############
+        # Conv Stack 2:
+        ###############
         model.add(
-            Conv2D(64, kernel_size=self.kernel_size, strides=2, padding="same")
+            Conv2D(128, kernel_size=5, strides=2, padding="same")
         )  # 64x64 -> 32x32
-        model.add(ZeroPadding2D(padding=((0, 1), (0, 1))))
-        model.add(LeakyReLU(alpha=0.2))
-        model.add(Dropout(0.25))
-        model.add(BatchNormalization(momentum=0.8))
+        #model.add(ZeroPadding2D(padding=((0, 1), (0, 1))))
 
+        model.add(LeakyReLU(alpha=0.2))
+        model.add(BatchNormalization(momentum=0.8))
+        #model.add(Dropout(0.25))
+
+
+        ###############
+        # Conv Stack 3:
+        ###############
         model.add(
-            Conv2D(128, kernel_size=self.kernel_size, strides=2, padding="same")
+            Conv2D(128, kernel_size=4, strides=2, padding="same")
         )  # 32x32 -> 16x16
-        model.add(LeakyReLU(alpha=0.2))
-        model.add(Dropout(0.25))
-        model.add(BatchNormalization(momentum=0.8))
 
+        model.add(LeakyReLU(alpha=0.2))
+        #model.add(Dropout(0.25))
+
+
+        ###############
+        # Conv Stack 4:
+        ###############
         model.add(
-            Conv2D(256, kernel_size=self.kernel_size, strides=1, padding="same")
+            Conv2D(128, kernel_size=4, strides=1, padding="same")
         )  # 16x16 -> 8x8
         model.add(LeakyReLU(alpha=0.2))
-        model.add(Dropout(0.25))
+        model.add(BatchNormalization(momentum=0.8))
+        #model.add(Dropout(0.25))
 
+        ###############
+        # Conv Stack 5:
+        ###############
         model.add(
-            Conv2D(512, kernel_size=self.kernel_size, strides=1, padding="same")
+            Conv2D(128, kernel_size=3, strides=1, padding="same")
         )  # 8x8 -> 4x4
         model.add(LeakyReLU(alpha=0.2))
-        model.add(Dropout(0.25))
+        model.add(BatchNormalization(momentum=0.8))
+        model.add(Dropout(0.4))
 
         model.add(Flatten())
         model.add(Dense(1, activation="sigmoid"))  # important binary classification.
@@ -286,7 +310,7 @@ class DCGAN:
         X_train = []
 
         # Load all files from the image path using Image.open.
-        for i in glob.glob(image_path):
+        for i in recursive_list(image_path):
             # Open images as ???
             img = Image.open(i)
             # Convert to NP array.
@@ -361,12 +385,13 @@ class DCGAN:
             # Now, take this noise_2d and try to generate the image (predicting an IMAGE from the noisy input in the first place.
             images_generated = self.generator.predict(noise_2d)
 
-            # Train the discriminator (real classified as ones and generated as zeros)
+            # Train the discriminator (real classified as between 0.8 to 1.2 and generated as 0.zeros): using soft labels result in 0.8 to 1.2 for
             loss_discriminator_on_real_data = self.discriminator.train_on_batch(
-                images, np.ones((half_batch, 1))
+                images, np.random.rand(half_batch) * 0.4 + 0.8
             )
+
             loss_discriminator_on_fake_data = self.discriminator.train_on_batch(
-                images_generated, np.zeros((half_batch, 1))
+                images_generated, np.random.rand(half_batch) * 0.3
             )
             # Final loss is a blend of discrimnator on both fake and real data
             loss_discriminator = 0.5 * np.add(
@@ -375,7 +400,7 @@ class DCGAN:
 
             # Print progress
             print(
-                f"{epoch} [D loss: {loss_discriminator[0]}, D:RLoss{loss_discriminator_on_real_data}, D:FLoss{loss_discriminator_on_fake_data} | D Accuracy: {100 * loss_discriminator[1]}] [G loss: {loss_generator}]"
+                f"{epoch} [D loss: {loss_discriminator[0]:3f}, D:RLoss {loss_discriminator_on_real_data[0]:3f}, D:FLoss {loss_discriminator_on_fake_data[0]:3f} | D Accuracy: {100 * loss_discriminator[1]:3f}] [G loss: {loss_generator:3f}]"
             )
 
             # If at save interval => save generated image samples, save model files
@@ -427,8 +452,8 @@ class DCGAN:
 
         assert nindex == nrows * column
 
-        # Form the gallery by combinging the data at pixel levels (may not be the best apporach)
-        # want result.shape = (height*nrows, width*ncols, intensity)
+        # Form the gallery by combining the data at pixel levels (may not be the best approach)
+        # want result.shape = (height*n-rows, width*n-cols, intensity)
         gallery = (
             images_generated.reshape(nrows, column, height, width, intensity)
             .swapaxes(1, 2)
@@ -480,23 +505,26 @@ class DCGAN:
 
 if __name__ == "__main__":
 
+    # Example Run Script on linux
+    # python model/Kaggle_DCGAN_Dogs/DCGAN.py --data /data/resized_128_128:
+
     # initialize a parser object.
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
         "--load_generator",
         help="Path to existing generator weights file",
-        default="C:\data\models\generat.h5",
+        default="/data/models/generat.h5",
     )
     parser.add_argument(
         "--load_discriminator",
         help="Path to existing discriminator weights file",
-        default="C:\data\models\discrim.h5",
+        default="/data/models/discrim.h5",
     )
     parser.add_argument(
         "--data",
         help="Path to directory of images of correct dimensions, using *.[filetype] (e.g. *.png) to reference images",
-        default=r"C:\data_dog\resized_128_128\*.jpg",
+        default=r"/data/resized_128_128/",
     )
     parser.add_argument(
         "--sample",
@@ -527,10 +555,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output_directory",
         help="Directoy to save weights and images to.",
-        default=r"C:\data_dog\test",
+        default=r"/data/doggan/test",
     )
 
-    # Parse the argument.
+    # Parse the argument.ß
     args = parser.parse_args()
 
     # Initiate the object.

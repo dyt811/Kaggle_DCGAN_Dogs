@@ -11,4 +11,10 @@ We will see how easy that is to do in practice.
 2019-07-16T194216EST
 Quite an elegantly and simply crafted DC gan that is barely a few hundred lines lone. I could add so much more to it: inception module for better scale invariant discrimination, more supplementary random data that will ensure higher specificity. 
 
- 
+2019-07-22T0925EST
+So I have trained on this BigBeast of 2070x2 for about 48 hours and what I observe is that the discriminator has the job too good and it failed to guide the generator. 
+
+As I was reading around yesterday, some tips were saying that it might be good to RANDOMLY force discriminators to make some mistakes. Some quick improvement: 1) adding TensorBoard integration. 2) force discriminator to be imperfect and almost semi-incompetent. Another important tips I did notice was that the discriminator loss was florring on the fake images suggesting a nash equilibrium was reached where regardless of what generator makes, discriminator nailed the classification and resulted in edge cases. 
+
+2019-07-30T1413EST
+Time is running short. I managed to inplement the SOFT label to GAN to ensure that it is not min-maxing in a local extreme and produce mode collapse. About 18h into the training,the mode collapse happened. Resulted in VERY clear temporal pattern from the generated images. ffmpeg -f image2 -pattern_type glob -i 'time-lapse-files/*.JPG'
