@@ -14,7 +14,6 @@ from keras.layers import (
     ZeroPadding2D,
 )
 from keras.optimizers import Adam
-import glob
 from PIL import Image
 import numpy as np
 import os, sys
@@ -31,16 +30,16 @@ path_module = path_current_file.parents[
 print(f"{path_module}")
 sys.path.append(f"{path_module}")
 
+
+# Some convenience function I already prebuilt: github.com/dyt811/PythonUtils/
 from PythonUtils.file import unique_name
-from PythonUtils.folder import recursive_list
+from PythonUtils.folder import recursive_list, create
 
 path_log_run = path_module / Path("logs")
 
-from PythonUtils.folder import create
-
 create(path_log_run)  # create the training specific folder if it doesn't exist already.
 
-noise_parameters = 100
+# dimensions_noise = 100
 
 """
 Largely inspired from source: https://github.com/DataSnaek/DCGAN-Keras
@@ -54,9 +53,14 @@ class DCGAN:
         self.img_size = img_size  # default x and y
         self.channels = 3
 
+        self.dimensions_noise = 100
+
         self.upsample_layers = 5
         self.starting_filters = 64
         self.kernel_size = 3
+
+        self.iteration_discriminator = 2
+        self.iteration_generator = 3
 
         self.discriminator_path = Path(path_discriminator)  # .as_posix()
         self.generator_path = Path(path_generator)  # .as_posix()
@@ -71,7 +75,7 @@ class DCGAN:
             NOISE SHAPE:
             IMAGE:
         """
-        noise_shape = (noise_parameters,)
+        noise_shape = (self.dimensions_noise,)
 
         # This block of code can be a little daunting, but essentially it automatically calculates the required starting
         # array size that will be correctly upscaled to our desired image size.
@@ -153,19 +157,12 @@ class DCGAN:
         # Conv Stack 1:
         ###############
         model.add(
-            Conv2D(
-                128,
-                kernel_size=5,
-                strides=2,
-                input_shape=img_shape,
-                padding="same",
-            )
+            Conv2D(128, kernel_size=5, strides=2, input_shape=img_shape, padding="same")
         )  # 128x128 -> 64x64
 
         model.add(LeakyReLU(alpha=0.2))
         model.add(BatchNormalization(momentum=0.8))
-        #model.add(Dropout(0.2))
-
+        # model.add(Dropout(0.2))
 
         ###############
         # Conv Stack 2:
@@ -173,12 +170,11 @@ class DCGAN:
         model.add(
             Conv2D(128, kernel_size=5, strides=2, padding="same")
         )  # 64x64 -> 32x32
-        #model.add(ZeroPadding2D(padding=((0, 1), (0, 1))))
+        # model.add(ZeroPadding2D(padding=((0, 1), (0, 1))))
 
         model.add(LeakyReLU(alpha=0.2))
         model.add(BatchNormalization(momentum=0.8))
-        #model.add(Dropout(0.25))
-
+        # model.add(Dropout(0.25))
 
         ###############
         # Conv Stack 3:
@@ -188,25 +184,21 @@ class DCGAN:
         )  # 32x32 -> 16x16
 
         model.add(LeakyReLU(alpha=0.2))
-        #model.add(Dropout(0.25))
-
+        model.add(BatchNormalization(momentum=0.8))
+        # model.add(Dropout(0.25))
 
         ###############
         # Conv Stack 4:
         ###############
-        model.add(
-            Conv2D(128, kernel_size=4, strides=1, padding="same")
-        )  # 16x16 -> 8x8
+        model.add(Conv2D(128, kernel_size=4, strides=1, padding="same"))  # 16x16 -> 8x8
         model.add(LeakyReLU(alpha=0.2))
         model.add(BatchNormalization(momentum=0.8))
-        #model.add(Dropout(0.25))
+        # model.add(Dropout(0.25))
 
         ###############
         # Conv Stack 5:
         ###############
-        model.add(
-            Conv2D(128, kernel_size=3, strides=1, padding="same")
-        )  # 8x8 -> 4x4
+        model.add(Conv2D(128, kernel_size=3, strides=1, padding="same"))  # 8x8 -> 4x4
         model.add(LeakyReLU(alpha=0.2))
         model.add(BatchNormalization(momentum=0.8))
         model.add(Dropout(0.4))
@@ -255,14 +247,14 @@ class DCGAN:
                 mode="max",
             )
 
-            # Generate the tensorboard
+            # Generate the tensorboard and its call back
             callback_tensorboard = TensorBoard(
                 log_dir=path_log_run, histogram_freq=0, write_images=True
             )
 
             self.callbacks_list = [
                 callback_tensorboard
-            ]  # ,callback_save_model]: #save model doesn't makc much sense when it is such a dynamic process.
+            ]  # ,callback_save_model]: #save model doesn't make much sense when it is such a dynamic process.
 
             # Build discriminator and compile it.
             self.discriminator = self.build_discriminator()
@@ -286,7 +278,7 @@ class DCGAN:
             )
 
         # These next few lines setup the training for the GAN, which the input Vector has a shape of noise_parameters
-        z = Input(shape=(noise_parameters,))
+        z = Input(shape=(self.dimensions_noise,))
         img = self.generator(z)
 
         self.discriminator.trainable = False
@@ -304,7 +296,7 @@ class DCGAN:
     def load_images(self, image_path):
         """
         Load all images from image path as X_train
-        :param image_path:
+        :param image_path: path to the folder which contain all images.
         :return: np array of X-train
         """
         X_train = []
@@ -349,16 +341,16 @@ class DCGAN:
         X_train = (X_train.astype(np.float32) - 127.5) / 127.5
 
         # Floor division to provide the largest possible half batch size in INTEGER
-        half_batch = batch_size // 2
+        third_batch = batch_size // 3
 
-        # Loop through the epoch
+        # Loop through the epochs
         for epoch in range(epochs):
 
             #################
             # Train Generator
             #################
             # randomly initialize the noise_2d input between 0 and 1 for a 2D matrix size of "batch_size" x noise_parameters (the number of noisy input used to generate images)
-            noise_2d = np.random.normal(0, 1, (batch_size, noise_parameters))
+            noise_2d = np.random.normal(0, 1, (batch_size, self.dimensions_noise))
 
             # obtain the input as Y
             loss_generator = self.combined.train_on_batch(
@@ -367,35 +359,104 @@ class DCGAN:
                 # y: since all these images are of the REAL subject, all of the output label are 1s, of the length of batch_size.
                 # Technically 2d array, but really is a 1d vector of lengh = batch_size.
                 # This assume ALL images being inputted are actually of that appropriate class and nothing else.
-                # SUper important assumption here.
-                np.ones((batch_size, 1)),  # y: a
+                # Super important assumption here.
+                # np.ones((batch_size, 1)),
+                np.random.rand(batch_size) * 0.4 + 0.8,  # y: a
             )
+
             #################
             # Train Discriminator
             #################
-            # Generate random int between 0 and count of X_train (n=?), for 50% of the batch time.
-            index = np.random.randint(0, X_train.shape[0], half_batch)
 
-            # Store those images.
-            images = X_train[index]
+            # -----------------
+            # Mixed 1/3 Image Batch
+            # -----------------
+            loss_discriminator_on_mixed_data = None
+            for round in range(self.iteration_generator):
+                sixth_batch = third_batch // 2
 
-            # Sample noise_2d and generate "half batch" of new images. Size half_batch x 100
-            noise_2d = np.random.normal(0, 1, (half_batch, noise_parameters))
+                # -----------------
+                # Fake 1/6 Image Batch
+                # -----------------
+                # Sample noise_2d and generate "half batch" of new images. Size third_batch x 100
+                noise_2d_size = (sixth_batch, self.dimensions_noise)
+                noise_2d = np.random.normal(0, 1, noise_2d_size)
 
-            # Now, take this noise_2d and try to generate the image (predicting an IMAGE from the noisy input in the first place.
-            images_generated = self.generator.predict(noise_2d)
+                # Now, take this noise_2d and try to generate the image (predicting an IMAGE from the noisy input in the first place.
+                images_generated = self.generator.predict(noise_2d)
+                soft_labels_fake = np.random.rand(sixth_batch) * 0.3
 
-            # Train the discriminator (real classified as between 0.8 to 1.2 and generated as 0.zeros): using soft labels result in 0.8 to 1.2 for
-            loss_discriminator_on_real_data = self.discriminator.train_on_batch(
-                images, np.random.rand(half_batch) * 0.4 + 0.8
-            )
+                # -----------------
+                # Real 1/6 Image Batch
+                # -----------------
 
-            loss_discriminator_on_fake_data = self.discriminator.train_on_batch(
-                images_generated, np.random.rand(half_batch) * 0.3
-            )
-            # Final loss is a blend of discrimnator on both fake and real data
-            loss_discriminator = 0.5 * np.add(
-                loss_discriminator_on_real_data, loss_discriminator_on_fake_data
+                # Generate random int between 0 and count of X_train (n=?), for 50% of the batch time.
+                index = np.random.randint(0, X_train.shape[0], sixth_batch)
+
+                # Store those images.
+                images = X_train[index]
+
+                # Train the discriminator (real classified as between 0.8 to 1.2 and generated as 0.zeros): using soft labels result in 0.8 to 1.2 for
+                soft_labels_true = np.random.rand(sixth_batch) * 0.4 + 0.8
+
+                # Combine both set.
+                images_generated.append(images)
+                soft_labels_fake.append(soft_labels_true)
+
+                loss_discriminator_on_mixed_data = self.discriminator.train_on_batch(
+                    images_generated,
+                    soft_labels_fake,  # Y distribution for false images (invalid)
+                )
+
+            # -----------------
+            # True 1/3 Image Batch
+            # -----------------
+            loss_discriminator_on_real_data = None
+            for round in range(self.iteration_discriminator):
+                # Generate random int between 0 and count of X_train (n=?), for 50% of the batch time.
+                index = np.random.randint(0, X_train.shape[0], third_batch)
+
+                # Store those images.
+                images = X_train[index]
+
+                # Train the discriminator (real classified as between 0.8 to 1.2 and generated as 0.zeros): using soft labels result in 0.8 to 1.2 for
+                soft_labels_true = np.random.rand(third_batch) * 0.4 + 0.8
+
+                loss_discriminator_on_real_data = self.discriminator.train_on_batch(
+                    images,
+                    soft_labels_true,  # Y distribution for training images (valid)
+                )
+
+            # -----------------
+            # Fake 1/3 Image Batch
+            # -----------------
+            loss_discriminator_on_fake_data = None
+            for round in range(self.iteration_generator):
+                # Sample noise_2d and generate "half batch" of new images. Size third_batch x 100
+                noise_2d_size = (third_batch, self.dimensions_noise)
+                noise_2d = np.random.normal(0, 1, noise_2d_size)
+
+                # Now, take this noise_2d and try to generate the image (predicting an IMAGE from the noisy input in the first place.
+                images_generated = self.generator.predict(noise_2d)
+                soft_labels_fake = np.random.rand(third_batch) * 0.3
+
+                loss_discriminator_on_fake_data = self.discriminator.train_on_batch(
+                    images_generated,
+                    soft_labels_fake,  # Y distribution for false images (invalid)
+                )
+
+            # -----------------
+            # Final Loss
+            # -----------------
+            # Final loss is a blend of discrimnator on both fake and real data, and combination of them.
+            loss_discriminator = (
+                1
+                / 3
+                * np.add(
+                    loss_discriminator_on_mixed_data,
+                    loss_discriminator_on_real_data,
+                    loss_discriminator_on_fake_data,
+                )
             )
 
             # Print progress
@@ -422,7 +483,7 @@ class DCGAN:
         :return:
         """
         # Generate images from the currently loaded model
-        noise = np.random.normal(0, 1, (count, noise_parameters))
+        noise = np.random.normal(0, 1, (count, self.dimensions_noise))
         return self.generator.predict(noise)
 
     def save_imgs(self, epoch):

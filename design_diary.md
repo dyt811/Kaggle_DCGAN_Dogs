@@ -18,3 +18,11 @@ As I was reading around yesterday, some tips were saying that it might be good t
 
 2019-07-30T1413EST
 Time is running short. I managed to inplement the SOFT label to GAN to ensure that it is not min-maxing in a local extreme and produce mode collapse. About 18h into the training,the mode collapse happened. Resulted in VERY clear temporal pattern from the generated images. ffmpeg -f image2 -pattern_type glob -i 'time-lapse-files/*.JPG'
+
+2019-08-05T190914EST
+Per Paul Green's suggestion, going to try to incorporate maybe training iteration differentials (i.e updating discriminator less while training generator more per cycle, 1:2 etc). Other important steps to try such as these: https://lilianweng.github.io/lil-log/2017/08/20/from-GAN-to-WGAN.html
+
+So in order of importance: 1) Slower discriminator update via cycle control. 2) caculating EARTH MOVER's as the GAN loss function. 
+
+2019-08-13T1832EST
+Looking back at the architecture, I think it is rather odd that TRUE images and FAKE images are compeltely separated. I think might be good to add a 3rd phase into it. Going to try it out on the BigBeast computation platform to see what is up. 
