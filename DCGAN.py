@@ -1,3 +1,4 @@
+import tensorflow as tf
 from keras.models import Sequential, Model, load_model
 from keras.callbacks import TensorBoard, ModelCheckpoint
 from keras.layers import (
@@ -35,7 +36,7 @@ sys.path.append(f"{path_module}")
 from PythonUtils.file import unique_name
 from PythonUtils.folder import recursive_list, create
 
-path_log_run = path_module / Path("logs")
+path_log_run = path_module / Path("logs") / unique_name()
 
 create(path_log_run)  # create the training specific folder if it doesn't exist already.
 
@@ -62,8 +63,11 @@ class DCGAN:
         self.iteration_discriminator = 2
         self.iteration_generator = 3
 
-        self.discriminator_path = Path(path_discriminator)  # .as_posix()
-        self.generator_path = Path(path_generator)  # .as_posix()
+        if path_discriminator is not None:
+            self.discriminator_path = Path(path_discriminator)  # .as_posix()
+        if path_generator is not None:
+            self.generator_path = Path(path_generator)  # .as_posix()
+
         self.output_directory = Path(path_output)  # .as_posix()
 
         self.model_name = Path(path_output) / Path(f"{unique_name()}_{__name__}.h5")
@@ -232,29 +236,20 @@ class DCGAN:
         metrics = ["accuracy", "mae", "mse", "mape", "cosine"]
 
         # See if the specified model paths exist, if they don't then we start training new models
-        if self.discriminator_path.is_file() and self.generator_path.is_file():
+        if hasattr(self, 'discriminator_path') and hasattr(self, 'generator_path') and\
+                self.discriminator_path.is_file() and self.generator_path.is_file():
             self.discriminator = load_model(self.discriminator_path)
             self.generator = load_model(self.generator_path)
             print("Loaded models...")
         else:  # training new model.
             print("Training models...")
 
-            callback_save_model = ModelCheckpoint(
-                self.model_name,
-                monitor="accuracy",
-                verbose=1,
-                save_best_only=True,
-                mode="max",
-            )
-
             # Generate the tensorboard and its call back
             callback_tensorboard = TensorBoard(
                 log_dir=path_log_run, histogram_freq=0, write_images=True
             )
 
-            self.callbacks_list = [
-                callback_tensorboard
-            ]  # ,callback_save_model]: #save model doesn't make much sense when it is such a dynamic process.
+            #self.callbacks_list = [callback_tensorboard]
 
             # Build discriminator and compile it.
             self.discriminator = self.build_discriminator()
@@ -263,8 +258,8 @@ class DCGAN:
             self.discriminator.compile(
                 loss=loss_measure_discriminator,
                 optimizer=optimizer_discriminator,
-                metrics=metrics,
-                callbacks=self.callbacks_list,
+                #metrics=metrics,
+                #callbacks=self.callbacks_list,
             )
 
             # Build generator and compile it.
@@ -274,7 +269,7 @@ class DCGAN:
             self.generator.compile(
                 loss=loss_measure_generator,
                 optimizer=optimizer_generator,
-                callback_save_model=self.callbacks_list,
+                #callbacks=self.callbacks_list,
             )
 
         # These next few lines setup the training for the GAN, which the input Vector has a shape of noise_parameters
@@ -308,7 +303,8 @@ class DCGAN:
             # Convert to NP array.
             img = np.asarray(img)
             # Append them into higher order array.
-            X_train.append(img)
+            if img.shape == (128,128,3):
+                X_train.append(img)
 
         # return all the images concatenated as a 4D array
         return np.asarray(X_train)
@@ -343,6 +339,12 @@ class DCGAN:
         # Floor division to provide the largest possible half batch size in INTEGER
         third_batch = batch_size // 3
 
+        # Logger Info:
+        log_path = '../../logs'
+        callback = TensorBoard(log_path)
+        callback.set_model(self.combined)
+
+
         # Loop through the epochs
         for epoch in range(epochs):
 
@@ -372,6 +374,8 @@ class DCGAN:
             # Mixed 1/3 Image Batch
             # -----------------
             loss_discriminator_on_mixed_data = None
+            loss_discriminator_on_fake_data = None
+            loss_discriminator_on_real_data = None
             for round in range(self.iteration_generator):
                 sixth_batch = third_batch // 2
 
@@ -400,19 +404,19 @@ class DCGAN:
                 soft_labels_true = np.random.rand(sixth_batch) * 0.4 + 0.8
 
                 # Combine both set.
-                images_generated.append(images)
-                soft_labels_fake.append(soft_labels_true)
+                a = np.vstack((images_generated, images))
+                b = np.hstack((soft_labels_fake, soft_labels_true))
 
                 loss_discriminator_on_mixed_data = self.discriminator.train_on_batch(
-                    images_generated,
-                    soft_labels_fake,  # Y distribution for false images (invalid)
+                    a,
+                    b,  # Y distribution for false images (invalid)
                 )
 
-            # -----------------
-            # True 1/3 Image Batch
-            # -----------------
-            loss_discriminator_on_real_data = None
-            for round in range(self.iteration_discriminator):
+                # -----------------
+                # True 1/3 Image Batch
+                # -----------------
+
+
                 # Generate random int between 0 and count of X_train (n=?), for 50% of the batch time.
                 index = np.random.randint(0, X_train.shape[0], third_batch)
 
@@ -427,11 +431,11 @@ class DCGAN:
                     soft_labels_true,  # Y distribution for training images (valid)
                 )
 
-            # -----------------
-            # Fake 1/3 Image Batch
-            # -----------------
-            loss_discriminator_on_fake_data = None
-            for round in range(self.iteration_generator):
+                # -----------------
+                # Fake 1/3 Image Batch
+                # -----------------
+
+
                 # Sample noise_2d and generate "half batch" of new images. Size third_batch x 100
                 noise_2d_size = (third_batch, self.dimensions_noise)
                 noise_2d = np.random.normal(0, 1, noise_2d_size)
@@ -449,19 +453,17 @@ class DCGAN:
             # Final Loss
             # -----------------
             # Final loss is a blend of discrimnator on both fake and real data, and combination of them.
-            loss_discriminator = (
-                1
-                / 3
-                * np.add(
-                    loss_discriminator_on_mixed_data,
-                    loss_discriminator_on_real_data,
-                    loss_discriminator_on_fake_data,
-                )
-            )
+            loss_discriminator = (loss_discriminator_on_mixed_data + loss_discriminator_on_real_data + loss_discriminator_on_fake_data)/3
+
+            # Logging the progress (only the final of the ROUNDS!):
+            names = ['D loss', 'D mix loss', 'D real loss', 'D fake loss', 'G loss']
+            logged_vars = [loss_discriminator, loss_discriminator_on_mixed_data, loss_discriminator_on_real_data, loss_discriminator_on_fake_data, loss_generator]
+            self.log_tensorboard(callback, names, logged_vars, epoch)
+
 
             # Print progress
             print(
-                f"{epoch} [D loss: {loss_discriminator[0]:3f}, D:RLoss {loss_discriminator_on_real_data[0]:3f}, D:FLoss {loss_discriminator_on_fake_data[0]:3f} | D Accuracy: {100 * loss_discriminator[1]:3f}] [G loss: {loss_generator:3f}]"
+                f"{epoch} [D loss: {loss_discriminator:3f} = Mix: {loss_discriminator_on_mixed_data:3f}, Real {loss_discriminator_on_real_data:3f}, Fake {loss_discriminator_on_fake_data:3f}[G loss: {loss_generator:3f}]"
             )
 
             # If at save interval => save generated image samples, save model files
@@ -470,11 +472,11 @@ class DCGAN:
                 # Save the images.
                 self.save_imgs(epoch)
 
-                save_path = self.output_directory + f"/models"
+                save_path = self.output_directory / 'models'
                 if not os.path.exists(save_path):
                     os.makedirs(save_path)
-                self.discriminator.save(save_path + f"/{unique_name()}_discrim.h5")
-                self.generator.save(save_path + f"/{unique_name()}_generat.h5")
+                self.discriminator.save((save_path / f'{unique_name()}_discrim.h5').as_posix())
+                self.generator.save((save_path / f'{unique_name()}_generat.h5').as_posix())
 
     def generate_images(self, count):
         """
@@ -526,6 +528,27 @@ class DCGAN:
             os.makedirs(path)
         imsave(path + f"/{unique_name()}_{epoch}.png", gallery)
 
+
+    def log_tensorboard(self, callback, names,logs,batch_no):
+        """
+        Based on the example shown from this thread on how ot write a simple callback function during the train-on-epoch
+        https://github.com/eriklindernoren/Keras-GAN/issues/52#issuecomment-402668526
+        :param callback: callback object.
+        :param names: variable names in list.
+        :param logs: log variable.
+        :param batch_no: batch number.
+        :return:
+        """
+
+        for name, value in zip(names, logs):
+            summary = tf.Summary()
+            summary_value = summary.value.add()
+            summary_value.simple_value = value
+            summary_value.tag = name
+            callback.writer.add_summary(summary, batch_no)
+            callback.writer.flush()
+
+
     def generate_images_thresholded(self, n_images, threshold, modifier):
         """
         A wrapped version of self.generate_images. Generates (count) images from the model ensuring the discriminator scores them between the threshold values and saves them.
@@ -575,17 +598,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "--load_generator",
         help="Path to existing generator weights file",
-        default="/data/models/generat.h5",
+        #default="/data/models/generat.h5",
     )
     parser.add_argument(
         "--load_discriminator",
         help="Path to existing discriminator weights file",
-        default="/data/models/discrim.h5",
+        #default="/data/models/discrim.h5",
     )
     parser.add_argument(
         "--data",
         help="Path to directory of images of correct dimensions, using *.[filetype] (e.g. *.png) to reference images",
-        default=r"/data/resized_128_128/",
+        default=r"//data/Images/resized/",
     )
     parser.add_argument(
         "--sample",
@@ -629,6 +652,7 @@ if __name__ == "__main__":
         args.output_directory,
         literal_eval(args.image_size),
     )
+
     if args.sample == -1:
         dcgan.train(
             epochs=int(args.epochs),
