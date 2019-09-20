@@ -4,7 +4,20 @@
 
 This is a relatively simple Deep Convolutional Generative Adversarial Network built in Keras. Given a dataset of images it will be able to generate new images similar to those in the dataset. 
 
-It was originally built to generate landscape paintings such as the source repositotires but it has since been repurposed to generate dog images for Kaggle competition as shown here: https://www.kaggle.com/c/generative-dog-images. It will also serve as the model project for subsequent GAN exploration and data augmentation pipeline being built at CNBP and MotionCorrect.
+It was originally built to generate landscape paintings such as the source repositories (https://github.com/DataSnaek/DCGAN-Keras) but it has since been repurposed slightly to generate dog images for Kaggle competition as shown here: https://www.kaggle.com/c/generative-dog-images. 
+
+The latest training I put the network through have about 20000+ images of 120 classes (http://vision.stanford.edu/aditya86/ImageNetDogs/) 
+
+It will also serve as the model project for subsequent GAN exploration and data augmentation pipeline being built at CNBP and MotionCorrect.
+
+The results from the Dog image generation can be viewed here: [https://imgur.com/a/rzWcp0Q](https://imgur.com/a/rzWcp0Q) and also in the /images folder. 
+
+## Future Work:
+
+* Clean up interface and respective documentation. 
+* Add Annealing approach
+* Add Gradual Performance improvement for Discriminator?
+* Speed up the training performance process
 
 
 # Getting Started

@@ -26,3 +26,10 @@ So in order of importance: 1) Slower discriminator update via cycle control. 2) 
 
 2019-08-13T1832EST
 Looking back at the architecture, I think it is rather odd that TRUE images and FAKE images are compeltely separated. I think might be good to add a 3rd phase into it. Going to try it out on the BigBeast computation platform to see what is up. 
+
+2019-09-20T1756EST
+After checking the output results after 230K epochs, I think it succeeded mostly. The results are not the best but definitely serve to do a reasonable basis to achieve both data generation and discrimination perspectives. 
+
+You can check the results at https://imgur.com/a/rzWcp0Q
+
+Will probably shelf this project for now after last bit of clean up so that future project can utilize this but stopping it for now.   
