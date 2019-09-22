@@ -33,8 +33,8 @@ sys.path.append(f"{path_module}")
 
 
 # Some convenience function I already prebuilt: github.com/dyt811/PythonUtils/
-from PythonUtils.file import unique_name
-from PythonUtils.folder import recursive_list, create
+from PythonUtils.PUFile import unique_name
+from PythonUtils.PUFolder import recursive_list, create
 
 path_log_run = path_module / Path("logs") / unique_name()
 
