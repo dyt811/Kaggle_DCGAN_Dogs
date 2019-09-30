@@ -236,8 +236,12 @@ class DCGAN:
         metrics = ["accuracy", "mae", "mse", "mape", "cosine"]
 
         # See if the specified model paths exist, if they don't then we start training new models
-        if hasattr(self, 'discriminator_path') and hasattr(self, 'generator_path') and\
-                self.discriminator_path.is_file() and self.generator_path.is_file():
+        if (
+            hasattr(self, "discriminator_path")
+            and hasattr(self, "generator_path")
+            and self.discriminator_path.is_file()
+            and self.generator_path.is_file()
+        ):
             self.discriminator = load_model(self.discriminator_path)
             self.generator = load_model(self.generator_path)
             print("Loaded models...")
@@ -249,7 +253,7 @@ class DCGAN:
                 log_dir=path_log_run, histogram_freq=0, write_images=True
             )
 
-            #self.callbacks_list = [callback_tensorboard]
+            # self.callbacks_list = [callback_tensorboard]
 
             # Build discriminator and compile it.
             self.discriminator = self.build_discriminator()
@@ -258,8 +262,8 @@ class DCGAN:
             self.discriminator.compile(
                 loss=loss_measure_discriminator,
                 optimizer=optimizer_discriminator,
-                #metrics=metrics,
-                #callbacks=self.callbacks_list,
+                # metrics=metrics,
+                # callbacks=self.callbacks_list,
             )
 
             # Build generator and compile it.
@@ -269,7 +273,7 @@ class DCGAN:
             self.generator.compile(
                 loss=loss_measure_generator,
                 optimizer=optimizer_generator,
-                #callbacks=self.callbacks_list,
+                # callbacks=self.callbacks_list,
             )
 
         # These next few lines setup the training for the GAN, which the input Vector has a shape of noise_parameters
@@ -303,7 +307,7 @@ class DCGAN:
             # Convert to NP array.
             img = np.asarray(img)
             # Append them into higher order array.
-            if img.shape == (128,128,3):
+            if img.shape == (128, 128, 3):
                 X_train.append(img)
 
         # return all the images concatenated as a 4D array
@@ -340,10 +344,9 @@ class DCGAN:
         third_batch = batch_size // 3
 
         # Logger Info:
-        log_path = '../../logs'
+        log_path = "../../logs"
         callback = TensorBoard(log_path)
         callback.set_model(self.combined)
-
 
         # Loop through the epochs
         for epoch in range(epochs):
@@ -408,14 +411,12 @@ class DCGAN:
                 b = np.hstack((soft_labels_fake, soft_labels_true))
 
                 loss_discriminator_on_mixed_data = self.discriminator.train_on_batch(
-                    a,
-                    b,  # Y distribution for false images (invalid)
+                    a, b  # Y distribution for false images (invalid)
                 )
 
                 # -----------------
                 # True 1/3 Image Batch
                 # -----------------
-
 
                 # Generate random int between 0 and count of X_train (n=?), for 50% of the batch time.
                 index = np.random.randint(0, X_train.shape[0], third_batch)
@@ -435,7 +436,6 @@ class DCGAN:
                 # Fake 1/3 Image Batch
                 # -----------------
 
-
                 # Sample noise_2d and generate "half batch" of new images. Size third_batch x 100
                 noise_2d_size = (third_batch, self.dimensions_noise)
                 noise_2d = np.random.normal(0, 1, noise_2d_size)
@@ -453,13 +453,22 @@ class DCGAN:
             # Final Loss
             # -----------------
             # Final loss is a blend of discrimnator on both fake and real data, and combination of them.
-            loss_discriminator = (loss_discriminator_on_mixed_data + loss_discriminator_on_real_data + loss_discriminator_on_fake_data)/3
+            loss_discriminator = (
+                loss_discriminator_on_mixed_data
+                + loss_discriminator_on_real_data
+                + loss_discriminator_on_fake_data
+            ) / 3
 
             # Logging the progress (only the final of the ROUNDS!):
-            names = ['D loss', 'D mix loss', 'D real loss', 'D fake loss', 'G loss']
-            logged_vars = [loss_discriminator, loss_discriminator_on_mixed_data, loss_discriminator_on_real_data, loss_discriminator_on_fake_data, loss_generator]
+            names = ["D loss", "D mix loss", "D real loss", "D fake loss", "G loss"]
+            logged_vars = [
+                loss_discriminator,
+                loss_discriminator_on_mixed_data,
+                loss_discriminator_on_real_data,
+                loss_discriminator_on_fake_data,
+                loss_generator,
+            ]
             self.log_tensorboard(callback, names, logged_vars, epoch)
-
 
             # Print progress
             print(
@@ -472,11 +481,15 @@ class DCGAN:
                 # Save the images.
                 self.save_imgs(epoch)
 
-                save_path = self.output_directory / 'models'
+                save_path = self.output_directory / "models"
                 if not os.path.exists(save_path):
                     os.makedirs(save_path)
-                self.discriminator.save((save_path / f'{unique_name()}_discrim.h5').as_posix())
-                self.generator.save((save_path / f'{unique_name()}_generat.h5').as_posix())
+                self.discriminator.save(
+                    (save_path / f"{unique_name()}_discrim.h5").as_posix()
+                )
+                self.generator.save(
+                    (save_path / f"{unique_name()}_generat.h5").as_posix()
+                )
 
     def generate_images(self, count):
         """
@@ -528,8 +541,7 @@ class DCGAN:
             os.makedirs(path)
         imsave(path + f"/{unique_name()}_{epoch}.png", gallery)
 
-
-    def log_tensorboard(self, callback, names,logs,batch_no):
+    def log_tensorboard(self, callback, names, logs, batch_no):
         """
         Based on the example shown from this thread on how ot write a simple callback function during the train-on-epoch
         https://github.com/eriklindernoren/Keras-GAN/issues/52#issuecomment-402668526
@@ -547,7 +559,6 @@ class DCGAN:
             summary_value.tag = name
             callback.writer.add_summary(summary, batch_no)
             callback.writer.flush()
-
 
     def generate_images_thresholded(self, n_images, threshold, modifier):
         """
@@ -598,12 +609,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--load_generator",
         help="Path to existing generator weights file",
-        #default="/data/models/generat.h5",
+        # default="/data/models/generat.h5",
     )
     parser.add_argument(
         "--load_discriminator",
         help="Path to existing discriminator weights file",
-        #default="/data/models/discrim.h5",
+        # default="/data/models/discrim.h5",
     )
     parser.add_argument(
         "--data",
